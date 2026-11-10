@@ -40,7 +40,8 @@ pub const MAX_SUPPORTED_PROTOCOL: i32 = 772; // 1.21.7/1.21.8
 pub struct Config {
     /// Display name used in the status response and version string.
     pub server_name: String,
-    /// TCP port to bind.
+    /// TCP port to bind. `0` asks the OS for a free port (used by tests and by
+    /// `--port=0`); the bound port is reported by `/status`.
     pub port: u16,
     /// Address to bind; `0.0.0.0` accepts connections from other devices.
     pub bind_address: String,
@@ -330,9 +331,10 @@ impl Config {
         if self.motd.len() > 256 {
             problems.push("motd must be at most 256 characters".to_string());
         }
-        if self.port == 0 {
-            problems.push("port must be 1–65535".to_string());
-        }
+        // 0 means "let the operating system choose a free port", which the
+        // launcher and the integration tests use; the effective port is logged
+        // and reported through `/status` once the socket is bound.
+
         if self.bind_address.trim().is_empty() {
             problems.push("bind-address must not be empty".to_string());
         }
@@ -469,7 +471,11 @@ mod tests {
         cfg.simulation_distance = 4;
         assert!(cfg.validate().is_ok());
 
+        // Port 0 is legal: it asks the OS to pick a free port.
         cfg.port = 0;
+        assert!(cfg.validate().is_ok(), "port 0 means an ephemeral port");
+
+        cfg.max_players = 0;
         assert!(cfg.validate().is_err());
     }
 

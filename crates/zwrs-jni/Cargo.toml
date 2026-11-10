@@ -1,0 +1,29 @@
+[package]
+name = "zwrs-jni"
+description = "JNI bridge that lets the Java launcher drive the ZWRS Rust engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "zwrs_jni"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zwrs-core = { path = "../zwrs-core" }
+zwrs-engine = { path = "../zwrs-engine" }
+
+# This crate is the FFI boundary and is the only place allowed to use `unsafe`.
+# Every unsafe block is documented in `src/sys.rs` and wrapped by `src/bridge.rs`;
+# the rest of the workspace keeps the inherited `unsafe_code = "deny"`.
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+

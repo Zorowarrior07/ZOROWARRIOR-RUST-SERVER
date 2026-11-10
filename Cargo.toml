@@ -4,6 +4,7 @@ members = [
     "crates/zwrs-core",
     "crates/zwrs-protocol",
     "crates/zwrs-engine",
+    "crates/zwrs-jni",
 ]
 
 [workspace.package]

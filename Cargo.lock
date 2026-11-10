@@ -15,5 +15,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "zwrs-jni"
+version = "0.1.0"
+dependencies = [
+ "zwrs-core",
+ "zwrs-engine",
+]
+
+[[package]]
 name = "zwrs-protocol"
 version = "0.1.0"
