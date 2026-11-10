@@ -25,7 +25,7 @@
 *.iml
 .DS_Store
 
-# Release archives are built by scripts/bundle.sh / CI and attached to GitHub
-# releases; they are never committed. A locally verified copy may exist in
-# releases/ for convenience.
-/releases/
+# Release artifacts are built by CI and attached to GitHub releases. The copy in
+# releases/ is committed on purpose: it is the verified build for the current
+# tag, so `java -jar` works from a fresh clone without a toolchain.
+/releases/*.tmp
