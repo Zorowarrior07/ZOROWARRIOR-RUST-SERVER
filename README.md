@@ -7,10 +7,10 @@
 java -jar ZOROWARRIOR-Rust-Server.jar
 ```
 
-**Downloads:** [v0.1.0 release](https://github.com/Zorowarrior07/ZOROWARRIOR-RUST-SERVER/releases/tag/v0.1.0)
+**Downloads:** [v0.2.0 release](https://github.com/Zorowarrior07/ZOROWARRIOR-RUST-SERVER/releases/tag/v0.2.0)
 
 * `ZOROWARRIOR-Rust-Server.jar` - the launcher on its own; the Rust engine is embedded inside it and extracted at start (size-verified).
-* `ZOROWARRIOR-Rust-Server-0.1.0-linux-x86_64.tar.gz` - full distribution: JAR + `native/linux-x86_64/` (engine and the standalone `zwrs-engine` binary).
+* `ZOROWARRIOR-Rust-Server-0.2.0-linux-x86_64.tar.gz` - full distribution: JAR + `native/linux-x86_64/` (engine and the standalone `zwrs-engine` binary).
 * `release-SHA256SUMS` - checksums for both assets.
 
 ```bash
@@ -163,7 +163,7 @@ docs/                  architecture, compatibility, player data, plugins, builds
 | Rust | 1.95.0 (rustc 59807616e 2026-04-14), cargo 1.95.0 |
 | Java | OpenJDK 17.0.8 (Temurin/HotSpot), `javac`/`jar` 17.0.8 |
 | Third-party crates | none (the entire workspace builds with `--offline`) |
-| Test results | 142 Rust tests + 37 Java tests + 10 acceptance checks, all passing |
+| Test results | 152 Rust tests + 42 Java tests + 18 acceptance checks, all passing |
 
 Android/Termux, Linux ARM64 and macOS have **not** been built or tested here;
 their requirements and the exact commands are documented rather than claimed.
