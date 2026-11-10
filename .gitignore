@@ -1,19 +1,26 @@
-# Rust build output
+# Rust
 /target/
 **/*.rs.bk
 
-# Java build output
+# Build and distribution output
+/dist/
 /build/
-/java/build/
-/java/out/
-*.class
+/out/
+*.jar.tmp
 
-# Runtime data written by the server
+# Runtime state: never commit a world, player database or log
+/config/
 /data/
 /logs/
-/config/
-/plugins/
+/plugins/*.jar
 /native/
 
-# Local toolchains / scratch
+# Local toolchains used for building (not part of the project)
 /.toolchain/
+/.jdk/
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
