@@ -169,6 +169,7 @@ pub unsafe fn new_string_utf(env: *mut c_void, utf: &CStr) -> Option<JString> {
 }
 
 /// RAII guard around `GetStringUTFChars` / `ReleaseStringUTFChars`.
+#[derive(Debug)]
 pub struct UtfChars<'a> {
     env: *mut c_void,
     string: JString,

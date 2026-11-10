@@ -61,6 +61,10 @@ fn new_java_string(env: *mut c_void, value: &str) -> sys::JString {
 pub(crate) enum BridgeError {
     Runtime(String),
     IllegalState(String),
+    /// Reserved for capabilities the engine deliberately refuses (as opposed to
+    /// failing). No bridge method returns it yet; the class mapping is covered by
+    /// a unit test so it cannot rot before the first real use.
+    #[cfg_attr(not(test), allow(dead_code))]
     Unsupported(String),
 }
 
