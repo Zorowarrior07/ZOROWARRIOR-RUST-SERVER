@@ -64,17 +64,22 @@ tests (`offline_login_creates_a_real_profile_and_session`).
 
 | Ecosystem | Discovery | Metadata validation | Execution |
 |---|---|---|---|
-| Bukkit / Spigot / Paper `.jar` | **tested** | **tested** (`plugin.yml`, `api-version`, class-file version, dependency order) | **not implemented** |
+| Bukkit / Spigot / Paper `.jar` | **tested** | **tested** (`plugin.yml`, `api-version`, class-file version, dependency order) | **tested for the documented subset**: load, enable, join/quit events, console commands |
 | Rust/WASM plugin directory | **tested** (Rust engine) | **tested** (`manifest.json`, API v1, `\0asm` header) | **not implemented** (no WASM runtime linked) |
 
-Loading a JAR is **not** evidence of compatibility, and neither is passing
-metadata validation. See `JAVA-PLUGIN-COMPATIBILITY.md`.
+A plugin runs only if it stays inside the API subset listed in
+`JAVA-PLUGIN-COMPATIBILITY.md`. A plugin that needs worlds, inventories, the
+scheduler or other events fails at load time with a named class/method, and the
+failure is isolated from the rest of the server.
 
 ## Evidence index
 
 | Claim | Test |
 |---|---|
 | JAR loads the Rust engine and stops it cleanly | `BridgeIntegrationTest.testLifecycleStartCommandStateStop`, `--selftest` |
+| A real plugin JAR loads, enables and receives engine events | `PluginRuntimeTest`, `scripts/acceptance_plugins.py` |
+| A plugin that throws is isolated | `PluginRuntimeTest.testContainsAFailedPluginWithoutStoppingTheServer` |
+| Plugin commands run from the console | `PluginRuntimeTest.testRunsPluginCommandsFromTheConsole`, acceptance script |
 | Bridge version mismatch is detected | `NativeBridge.load` + `BridgeIntegrationTest.testBridgeVersionMatches` |
 | Status ping reports real data | `status_ping_reports_real_state`, `acceptance_persistence.py` |
 | Offline UUID matches vanilla | `identity::tests::offline_uuid_matches_vanilla_vectors`, `OfflineUuidTest`, `BridgeIntegrationTest.testSelfTestAgreesWithJavaUuidDerivation` |

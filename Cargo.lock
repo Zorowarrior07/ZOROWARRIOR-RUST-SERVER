@@ -4,11 +4,11 @@ version = 3
 
 [[package]]
 name = "zwrs-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "zwrs-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "zwrs-core",
  "zwrs-protocol",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "zwrs-jni"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "zwrs-core",
  "zwrs-engine",
@@ -24,4 +24,4 @@ dependencies = [
 
 [[package]]
 name = "zwrs-protocol"
-version = "0.1.0"
+version = "0.2.0"

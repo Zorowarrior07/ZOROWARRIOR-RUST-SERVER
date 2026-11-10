@@ -70,12 +70,17 @@ jobs:
           cd dist/ZOROWARRIOR-Rust-Server-*
           sha256sum -c SHA256SUMS
       - name: Bridge self-test
-        run: java -jar ZOROWARRIOR-Rust-Server.jar --selftest
-        working-directory: dist/ZOROWARRIOR-Rust-Server-0.1.0-linux-x86_64
+        run: |
+          cd dist/ZOROWARRIOR-Rust-Server-*/
+          java -jar ZOROWARRIOR-Rust-Server.jar --selftest
       - name: Persistence acceptance
         run: |
           jar=$(ls dist/*/ZOROWARRIOR-Rust-Server.jar | head -1)
           python3 scripts/acceptance_persistence.py --jar "$jar"
+      - name: Java plugin acceptance
+        run: |
+          jar=$(ls dist/*/ZOROWARRIOR-Rust-Server.jar | head -1)
+          python3 scripts/acceptance_plugins.py --jar "$jar"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

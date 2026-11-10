@@ -4,6 +4,29 @@ All notable changes to ZWRS are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+* **Java plugins run.** A Bukkit-compatible API subset (`org.bukkit.*`), a
+  per-plugin class loader with server-first API resolution, `JavaPlugin` lifecycle
+  (`onLoad`/`onEnable`/`onDisable`), `PluginManager.registerEvents` with priority
+  ordering, `PlayerJoinEvent`/`PlayerQuitEvent` raised by the Rust engine, command
+  registration and console dispatch, per-plugin data folders and logging.
+* Engine `HostListener` seam and `EngineHooks` JNI callbacks (bridge version 2).
+* `scripts/acceptance_plugins.py`: compiles a real plugin, runs it in the real
+  server and asserts on what the plugin observed.
+
+### Fixed
+
+* JNI `CallStatic*Method` slot indices were the array-taking variants and
+  segfaulted the JVM; all slots are now measured with `offsetof`, documented in
+  one table and guarded by a test.
+* Engine threads attached with `AttachCurrentThread` kept the JVM alive after
+  `/stop`; they now attach as daemons.
+* Console output is flushed per command so piped consoles (systemd, CI) show it
+  immediately.
+
 ## [0.1.0] - 2026-11-10
 
 First tagged milestone: the JAR-to-Rust architecture proof plus a real

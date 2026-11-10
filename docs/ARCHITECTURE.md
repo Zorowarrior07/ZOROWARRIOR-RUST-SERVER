@@ -113,6 +113,23 @@ program that printed `offsetof(struct JNINativeInterface_, X) / sizeof(void*)`:
 | `DeleteLocalRef` | 23 | releasing class references |
 | `NewStringUTF` | 167 | returning JSON strings |
 | `GetStringUTFLength` / `GetStringUTFChars` / `ReleaseStringUTFChars` | 168 / 169 / 170 | reading arguments |
+| `GetObjectClass` / `GetMethodID` / `CallObjectMethod` | 31 / 33 / 34 | reading `Throwable.toString()` for error reports |
+| `GetStaticMethodID` / `CallStaticVoidMethod` / `CallStaticObjectMethod` | 113 / 141 / 114 | calling the Java plugin host |
+| `GetJavaVM` | 219 | attaching engine threads to the JVM |
+| `NewGlobalRef` / `DeleteGlobalRef` / `NewLocalRef` | 21 / 22 / 25 | keeping the plugin host alive |
+| `ExceptionDescribe` | 16 | printing the Java stack trace of a plugin failure |
+
+`JavaVM` uses `AttachCurrentThreadAsDaemon` (slot 7), **not**
+`AttachCurrentThread` (4). A thread attached the non-daemon way makes the JVM
+wait for it at shutdown, so `/stop` would hang the process — this was a real bug
+found by the plugin acceptance test.
+
+The variadic call family has three adjacent slots per method:
+`CallStaticVoidMethod`=141, `...V`=142, `...A`=143 and
+`CallStaticObjectMethod`=114, `...V`=115, `...A`=116. Passing a vararg pointer to
+the `A` variant segfaults the JVM; the correct indices are measured with
+`offsetof`, collected in `zwrs_jni::sys::slot_table()` and asserted by a unit
+test so they cannot drift silently.
 
 **Versioning rules**
 
@@ -135,6 +152,24 @@ program that printed `offsetof(struct JNINativeInterface_, X) / sizeof(void*)`:
 | `nativeState()` | JSON | running flag, address, players, counters |
 | `nativeStop()` | JSON `{stopped, online_players_closed}` | graceful; idempotent |
 
+## Plugin callbacks (Rust -> Java)
+
+```text
+engine connection thread
+  └─ profile + session persisted
+       └─ events::HostListener::player_join(event)
+            └─ zwrs_jni::host  (attaches the thread as a daemon)
+                 └─ EngineHooks.onPlayerJoin(json)      [Java]
+                      └─ PluginRuntime.fireJoin -> @EventHandler methods
+```
+
+* Hooks run with no engine lock held, after the durable write.
+* A panicking Rust listener is logged and contained; a throwing Java handler
+  disables only the plugin that threw.
+* Console commands the engine does not implement are offered to the host first
+  (`EngineHooks.onCommand`), so plugin commands work from the console; built-ins
+  can never be shadowed.
+
 ## Startup and shutdown sequence
 
 ```text
@@ -150,11 +185,13 @@ Launcher.run()
   │    ├─ reconcile sessions/profiles ← unfinished sessions, forced-offline profiles
   │    ├─ bind + accept thread
   │    └─ return bound address + capability report
-  ├─ plugin discovery (metadata only)
+  ├─ Java plugins: load, enable, register events/commands
+  ├─ install the plugin host into the engine (JNI, bridge version 2)
   ├─ install SIGINT/SIGTERM handlers + JVM shutdown hook
   └─ console loop ──► nativeCommand(...)
 
 stop
+  ├─ detach the plugin host, disable plugins (onDisable), reverse load order
   ├─ close active sessions (credit playtime)
   ├─ save players.json + profiles/*.json + sessions.json (atomic)
   └─ join accept thread

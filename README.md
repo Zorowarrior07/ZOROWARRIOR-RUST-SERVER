@@ -36,9 +36,11 @@ reports its own capabilities.
 >
 > **Not implemented:** play-state (you cannot join and move around), online-mode
 > authentication (Mojang/Microsoft session service), world/chunks/entities/
-> inventory/chat, Bukkit API execution and WASM plugin execution. The engine
-> reports these gaps in `/status`, `/version`, the status ping and its
-> capability report instead of pretending. See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+> inventory/chat delivery, and WASM plugin execution. Java plugins **do** run:
+> they are loaded, enabled, and receive real join/quit events and console
+> commands. The engine reports every gap in `/status`, `/version`, the status
+> ping and its capability report instead of pretending.
+> See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ---
 
@@ -54,11 +56,13 @@ reports its own capabilities.
 | Player profiles (JSON, atomic, restart-safe) | **working** | `profile_and_session_survive_a_restart` |
 | Sessions, playtime, crash recovery | **working** | `crash_recovery_marks_interrupted_sessions_unfinished` |
 | `/help /version /status /players /playerinfo /plugins /reload /stop` | **working** | `src/admin.rs` tests |
-| Java plugin discovery, `plugin.yml` validation, checksums | **working** (metadata only) | `JavaPluginHostTest` |
+| Java plugin discovery, `plugin.yml` validation, checksums | **working** | `JavaPluginHostTest` |
+| **Java plugins actually run** (load, enable, events, commands) | **working** | `PluginRuntimeTest`, `acceptance_plugins.py` |
 | WASM plugin validation (manifest, API version, header) | **working** (no execution) | `plugins::tests` |
 | Play state (world, movement, inventory, chat) | **not implemented** | reported by `/version` |
+| Java plugin code execution, events, commands | **working** (Bukkit subset) | `PluginRuntimeTest`, `acceptance_plugins.py` |
 | Online-mode authentication | **not implemented** (logins refused) | `online_mode_refuses_logins_instead_of_pretending` |
-| Bukkit API / plugin code execution | **not implemented** | `JavaPluginHost.supportedApis()` |
+| Bukkit API surface beyond the documented subset | **not implemented** | `PluginRuntime.supportedApis()` |
 
 Nothing in this list is claimed without a test that exercises it. Tests that use
 simulated packets are labelled as such; tests with a real Minecraft client have
@@ -172,7 +176,7 @@ See [docs/ANDROID-INSTALLATION.md](docs/ANDROID-INSTALLATION.md) and
 * [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — version matrix with evidence and gaps
 * [docs/PLAYER-DATA.md](docs/PLAYER-DATA.md) — storage format, atomicity, recovery
 * [docs/SESSION-SYSTEM.md](docs/SESSION-SYSTEM.md) — sessions, playtime, crash policy
-* [docs/JAVA-PLUGIN-COMPATIBILITY.md](docs/JAVA-PLUGIN-COMPATIBILITY.md) — what is validated vs. executed
+* [docs/JAVA-PLUGIN-COMPATIBILITY.md](docs/JAVA-PLUGIN-COMPATIBILITY.md) — the Bukkit subset that runs, and what does not
 * [docs/RUST-PLUGIN-DEVELOPMENT.md](docs/RUST-PLUGIN-DEVELOPMENT.md) — manifest, API version, SDK plan
 * [docs/ANDROID-INSTALLATION.md](docs/ANDROID-INSTALLATION.md) — Termux requirements and caveats
 * [docs/LINUX-INSTALLATION.md](docs/LINUX-INSTALLATION.md) — install, run, systemd

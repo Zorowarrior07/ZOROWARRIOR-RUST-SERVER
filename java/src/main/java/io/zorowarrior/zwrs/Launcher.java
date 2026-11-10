@@ -50,7 +50,7 @@ public final class Launcher {
     private static volatile Map<String, Object> buildInfo;
 
     /** Version of this launcher; must match the engine release. */
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
 
     private final LauncherOptions args;
     private final AtomicBoolean stopping = new AtomicBoolean(false);
