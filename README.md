@@ -3,8 +3,22 @@
 **A Rust-powered Minecraft: Java Edition server, distributed as a Java `.jar`.**
 
 ```bash
+# download, then:
 java -jar ZOROWARRIOR-Rust-Server.jar
 ```
+
+**Downloads:** [v0.1.0 release](https://github.com/Zorowarrior07/ZOROWARRIOR-RUST-SERVER/releases/tag/v0.1.0)
+
+* `ZOROWARRIOR-Rust-Server.jar` - the launcher on its own; the Rust engine is embedded inside it and extracted at start (size-verified).
+* `ZOROWARRIOR-Rust-Server-0.1.0-linux-x86_64.tar.gz` - full distribution: JAR + `native/linux-x86_64/` (engine and the standalone `zwrs-engine` binary).
+* `release-SHA256SUMS` - checksums for both assets.
+
+```bash
+sha256sum -c release-SHA256SUMS && java -jar ZOROWARRIOR-Rust-Server.jar --selftest
+```
+
+A prebuilt copy of both files also lives in [`releases/`](releases/) with a
+`SHA256SUMS` file, so the artifact is available even without a network.
 
 The JAR is a launcher: it locates the native Rust engine for your operating
 system, loads it through JNI, starts it, forwards your console commands, and
