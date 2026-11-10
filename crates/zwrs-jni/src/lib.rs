@@ -29,6 +29,7 @@
 #![deny(missing_docs)]
 
 pub mod bridge;
+mod host;
 pub mod sys;
 
 use std::os::raw::c_void;
@@ -44,7 +45,7 @@ use bridge::{bridge_call, read_jstring, BridgeError};
 ///
 /// Bump this whenever the JSON shapes or method set change; the Java side
 /// refuses to run against a mismatched native library.
-pub const JNI_BRIDGE_VERSION: u32 = 1;
+pub const JNI_BRIDGE_VERSION: u32 = 2;
 
 /// Global engine handle. The JVM loads the library once, so a process-wide
 /// singleton matches the Java `System.load` model.
@@ -281,6 +282,7 @@ pub unsafe extern "C" fn Java_io_zorowarrior_zwrs_NativeBridge_nativeState(
             Some(engine) => {
                 use std::sync::atomic::Ordering::Relaxed;
                 map.insert("running".into(), zwrs_core::Json::Bool(engine.handle.is_running()));
+                map.insert("plugin_host".into(), zwrs_core::Json::Bool(host::is_installed()));
                 map.insert(
                     "address".into(),
                     zwrs_core::Json::String(engine.handle.address().to_string()),
@@ -363,6 +365,70 @@ pub unsafe extern "C" fn Java_io_zorowarrior_zwrs_NativeBridge_nativeStop(
                 );
             }
         }
+        Ok(zwrs_core::Json::Object(map).to_compact())
+    })
+}
+
+/// `nativeInstallHost(hook) -> String` (JSON `{installed: true}`)
+///
+/// Registers the Java plugin host object (`io.zorowarrior.zwrs.plugin.EngineHooks`)
+/// as the receiver of player events and unknown console commands. Called by the
+/// launcher once the plugin runtime is ready; before that every hook is a no-op.
+///
+/// Fails (throws) when the class is missing, which means the JAR and the native
+/// library come from different builds.
+///
+/// # Safety
+/// Called by the JVM with a valid environment and a live `hook` reference.
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_zorowarrior_zwrs_NativeBridge_nativeInstallHost(
+    env: *mut c_void,
+    _class: *mut c_void,
+    hook: *mut c_void,
+) -> sys::JString {
+    bridge_call(env, || {
+        let mut slot = engine_slot()
+            .lock()
+            .map_err(|_| BridgeError::IllegalState("engine state is poisoned".into()))?;
+        let Some(engine) = slot.as_ref() else {
+            return Err(BridgeError::IllegalState(
+                "the engine must be running before a plugin host is installed".into(),
+            ));
+        };
+        host::install(env, hook).map_err(BridgeError::Runtime)?;
+        zwrs_engine::server::set_listener(&engine.state, Some(Arc::new(host::JavaHost)));
+        let mut map = zwrs_core::Json::object();
+        map.insert("installed".into(), zwrs_core::Json::Bool(true));
+        map.insert(
+            "host".into(),
+            zwrs_core::Json::String("io.zorowarrior.zwrs.plugin.EngineHooks".into()),
+        );
+        Ok(zwrs_core::Json::Object(map).to_compact())
+    })
+}
+
+/// `nativeRemoveHost() -> String` (JSON `{installed: false}`)
+///
+/// Detaches the plugin host: events stop being delivered and unknown commands are
+/// reported as unknown again. Safe to call when no host is installed.
+///
+/// # Safety
+/// Called by the JVM with a valid environment.
+#[no_mangle]
+pub unsafe extern "C" fn Java_io_zorowarrior_zwrs_NativeBridge_nativeRemoveHost(
+    env: *mut c_void,
+    _class: *mut c_void,
+) -> sys::JString {
+    bridge_call(env, || {
+        let slot = engine_slot()
+            .lock()
+            .map_err(|_| BridgeError::IllegalState("engine state is poisoned".into()))?;
+        host::uninstall(env);
+        if let Some(engine) = slot.as_ref() {
+            zwrs_engine::server::set_listener(&engine.state, None);
+        }
+        let mut map = zwrs_core::Json::object();
+        map.insert("installed".into(), zwrs_core::Json::Bool(false));
         Ok(zwrs_core::Json::Object(map).to_compact())
     })
 }

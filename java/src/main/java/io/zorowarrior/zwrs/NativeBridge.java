@@ -14,7 +14,7 @@ import java.util.Map;
 public final class NativeBridge {
 
     /** Bridge contract version this Java code was written against. */
-    public static final int EXPECTED_BRIDGE_VERSION = 1;
+    public static final int EXPECTED_BRIDGE_VERSION = 2;
 
     static boolean loaded;
 
@@ -59,6 +59,17 @@ public final class NativeBridge {
 
     public static native String nativeState();
 
+    /**
+     * Installs the Java plugin host so player events and plugin commands reach it.
+     *
+     * @param hooks the hook object (io.zorowarrior.zwrs.plugin.EngineHooks statics)
+     * @return the bridge reply
+     */
+    public static native String nativeInstallHost(Object hooks);
+
+    /** Detaches the plugin host; later events are dropped. */
+    public static native String nativeRemoveHost();
+
     // ---- typed helpers -----------------------------------------------------
 
     /** Result of a console command. */
@@ -94,5 +105,20 @@ public final class NativeBridge {
 
     public static Map<String, Object> stop() {
         return Json.parseObject(nativeStop());
+    }
+
+    /**
+     * Installs the plugin host.
+     *
+     * @param hooks the hook class instance
+     * @return the bridge reply
+     */
+    public static Map<String, Object> installHost(Object hooks) {
+        return Json.parseObject(nativeInstallHost(hooks));
+    }
+
+    /** Detaches the plugin host. */
+    public static Map<String, Object> removeHost() {
+        return Json.parseObject(nativeRemoveHost());
     }
 }

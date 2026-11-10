@@ -20,7 +20,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.zorowarrior.zwrs.plugin.JavaPluginHost;
+import io.zorowarrior.zwrs.plugin.EngineHooks;
 import io.zorowarrior.zwrs.plugin.PluginManager;
+import io.zorowarrior.zwrs.plugin.PluginRuntime;
+import io.zorowarrior.zwrs.plugin.ServerImpl;
 
 /**
  * Entry point of {@code java -jar ZOROWARRIOR-Rust-Server.jar}.
@@ -39,6 +42,12 @@ import io.zorowarrior.zwrs.plugin.PluginManager;
  * stops the Rust engine.</p>
  */
 public final class Launcher {
+
+    /** Plugin runtime, or null when no plugins are running. */
+    private static volatile PluginRuntime pluginRuntime;
+
+    /** Cached engine build info. */
+    private static volatile Map<String, Object> buildInfo;
 
     /** Version of this launcher; must match the engine release. */
     public static final String VERSION = "0.1.0";
@@ -140,6 +149,8 @@ public final class Launcher {
             Log.warn("Plugin discovery failed: " + error.getMessage());
         }
 
+        startPlugins(directory);
+
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown, "zwrs-shutdown"));
         Log.info("Type a command (/help) or press Ctrl+C to stop.");
 
@@ -153,6 +164,93 @@ public final class Launcher {
         consoleLoop();
         shutdown();
         return 0;
+    }
+
+
+    /**
+     * Loads, enables and connects Java plugins.
+     *
+     * <p>This is the step that turns a plugin JAR from metadata into running code:
+     * the runtime instantiates each plugin, calls {@code onEnable()}, registers its
+     * listeners and commands, and then the host object is installed into the
+     * engine so real joins and quits arrive as events.</p>
+     *
+     * <p>A failure anywhere here is reported and the server keeps running without
+     * plugins; it never prevents the engine from serving.</p>
+     */
+    private void startPlugins(Path directory) {
+        try {
+            PluginRuntime runtime = new PluginRuntime();
+            ServerImpl server = new ServerImpl(runtime,
+                    line -> NativeBridge.command(line).lines(),
+                    Json.string(engineBuild(), "motd", "ZOROWARRIOR Rust Server"),
+                    (int) Json.number(engineBuild(), "max_players", 20),
+                    args.onlineMode(),
+                    "ZOROWARRIOR Rust Server " + Json.string(engineBuild(), "version", "?"),
+                    Json.string(engineBuild(), "minecraft_version", "1.21.8"));
+
+            org.bukkit.Bukkit.setServer(server);
+            runtime.loadAll(directory.resolve("plugins"), server);
+            EngineHooks.install(runtime, server);
+            Map<String, Object> hooksInfo = NativeBridge.installHost(new EngineHooksHolder());
+            // The runtime must exist before the host is installed, otherwise the
+            // first events are dropped.
+            pluginRuntime = runtime;
+            if (runtime.enabledCount() == 0) {
+                Log.info("plugin host connected ("
+                        + Json.string(hooksInfo, "host", "?")
+                        + "); no Java plugins are enabled, so nothing will be called");
+            } else {
+                Log.info("plugin host connected: " + runtime.enabledCount()
+                        + " Java plugin(s) now receive joins and quits");
+            }
+            for (String line : runtime.report()) {
+                Log.info("plugins: " + line);
+            }
+            pluginRuntime = runtime;
+        } catch (RuntimeException | Error error) {
+            Log.error("Java plugins could not be started: " + error);
+        }
+    }
+
+    /**
+     * Holder passed to the engine. The static methods of {@link EngineHooks} are
+     * what actually run, so this object exists to keep the JNI signature simple
+     * (one object argument) and to fail loudly if the class is missing.
+     */
+    private static final class EngineHooksHolder {
+    }
+
+    /** @return cached engine build info, fetched once when the server starts */
+    private Map<String, Object> engineBuild() {
+        if (buildInfo == null) {
+            try {
+                buildInfo = NativeBridge.buildInfo();
+            } catch (RuntimeException error) {
+                buildInfo = Map.of();
+            }
+        }
+        return buildInfo;
+    }
+
+    /** Shuts plugin code down before the engine closes its sockets. */
+    private void stopPlugins() {
+        PluginRuntime runtime = pluginRuntime;
+        if (runtime == null) {
+            return;
+        }
+        try {
+            NativeBridge.removeHost();
+        } catch (RuntimeException error) {
+            Log.warn("could not detach the plugin host: " + error.getMessage());
+        }
+        EngineHooks.install(null, null);
+        try {
+            runtime.disableAll();
+        } catch (RuntimeException | Error error) {
+            Log.error("a plugin threw while being disabled: " + error);
+        }
+        pluginRuntime = null;
     }
 
     private int runSelfTest(Path directory) {
@@ -281,7 +379,13 @@ public final class Launcher {
                 }
                 try {
                     NativeBridge.CommandResult result = NativeBridge.command(trimmed);
-                    result.lines().forEach(System.out::println);
+                    // Flush explicitly: when stdout is a pipe (systemd, CI, a test
+                    // harness) an unflushed line can appear much later, which makes
+                    // console output look wrong even though the command worked.
+                    for (String outputLine : result.lines()) {
+                        System.out.println(outputLine);
+                    }
+                    System.out.flush();
                     if (!result.recognised()) {
                         System.out.println("(unknown command: try /help)");
                     }
@@ -346,6 +450,9 @@ public final class Launcher {
         if (!stopping.compareAndSet(false, true)) {
             return;
         }
+        // Plugins go first: a plugin's onDisable() may still want to talk to the
+        // engine, and a plugin must never see a half-shut-down server.
+        stopPlugins();
         Log.info("Stopping the Rust engine...");
         try {
             Map<String, Object> result = NativeBridge.stop();

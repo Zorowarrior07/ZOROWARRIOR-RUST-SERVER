@@ -248,7 +248,7 @@ fn status_lines(state: &SharedState) -> Vec<String> {
             metrics.protocol_errors.load(Relaxed)
         ),
         format!(
-            "Plugins: {} artifact(s) in {} ({} loadable)",
+            "Plugins: {} artifact(s) in {} ({} metadata-valid; the Java host loads them)",
             scan.plugins.len(),
             state.config.plugin_dir.display(),
             scan.loadable_count()

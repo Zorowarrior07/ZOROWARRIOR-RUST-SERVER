@@ -22,7 +22,8 @@ public final class TestRunner {
             PluginYamlTest.class,
             JavaPluginHostTest.class,
             LauncherArgsTest.class,
-            BridgeIntegrationTest.class);
+            BridgeIntegrationTest.class,
+            PluginRuntimeTest.class);
 
     public static void main(String[] args) throws Exception {
         List<String> failures = new ArrayList<>();

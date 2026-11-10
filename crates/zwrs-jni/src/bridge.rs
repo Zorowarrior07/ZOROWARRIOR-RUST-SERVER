@@ -140,6 +140,20 @@ pub(crate) fn build_info_json() -> String {
             "native_crate_version".into(),
             zwrs_core::Json::String(env!("CARGO_PKG_VERSION").to_string()),
         );
+        // Facts the launcher needs to build the plugin-facing Server object and
+        // the status ping; read from the engine rather than duplicated in Java.
+        object.insert(
+            "max_players".into(),
+            zwrs_core::Json::Number(f64::from(zwrs_core::config::Config::default().max_players)),
+        );
+        object.insert(
+            "minecraft_version".into(),
+            zwrs_core::Json::String(zwrs_engine::VERSION_NAME.to_string()),
+        );
+        object.insert(
+            "motd".into(),
+            zwrs_core::Json::String(zwrs_core::config::Config::default().motd.clone()),
+        );
     }
     map.to_compact()
 }

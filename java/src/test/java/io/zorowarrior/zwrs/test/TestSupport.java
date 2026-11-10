@@ -69,6 +69,18 @@ public final class TestSupport {
     }
 
     /** Writes a JAR containing the given text entries. */
+    /** Deletes a directory tree, ignoring anything that is already gone. */
+    public static void deleteTree(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     public static Path writeJar(Path dir, String name, Map<String, byte[]> entries) throws IOException {
         Path jar = dir.resolve(name);
         try (OutputStream out = Files.newOutputStream(jar);

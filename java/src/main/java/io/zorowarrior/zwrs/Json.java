@@ -232,6 +232,23 @@ public final class Json {
     }
 
     /** Escapes a string for inclusion in a JSON document. */
+    /**
+     * Serialises a list of strings as a JSON array.
+     *
+     * @param values the strings
+     * @return JSON text
+     */
+    public static String toJsonArray(List<String> values) {
+        StringBuilder out = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                out.append(',');
+            }
+            out.append(quote(values.get(i)));
+        }
+        return out.append(']').toString();
+    }
+
     public static String quote(String value) {
         StringBuilder out = new StringBuilder(value.length() + 2);
         out.append('"');
