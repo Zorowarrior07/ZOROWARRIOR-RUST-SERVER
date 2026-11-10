@@ -72,9 +72,14 @@ jobs:
 
             Included: linux-x86_64 (JAR + native engine + SHA256SUMS).
 
+            Java plugins run: they are loaded, enabled and receive real join/quit
+            events and console commands through a documented Bukkit-compatible API
+            subset (see docs/JAVA-PLUGIN-COMPATIBILITY.md).
+
             Not implemented in this release: play-state packets (world, movement,
-            inventory, chat), online-mode authentication, Bukkit API execution and
-            WASM plugin execution. See docs/COMPATIBILITY.md for the verified matrix.
+            inventory, chat), online-mode authentication, worlds/schedulers and the
+            rest of the Bukkit API, and WASM plugin execution. See
+            docs/COMPATIBILITY.md for the verified matrix.
 
             Always verify `sha256sum -c SHA256SUMS` before running.
           draft: false
