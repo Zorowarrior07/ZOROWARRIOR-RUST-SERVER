@@ -27,6 +27,7 @@ pub mod json;
 pub mod log;
 pub mod md5;
 pub mod profile;
+pub mod sha256;
 pub mod session;
 pub mod storage;
 pub mod time;

@@ -211,7 +211,8 @@ pub fn read_to_string(path: &Path) -> Result<String> {
 /// ```json
 /// { "format": 1, "written_at": "2026-11-10T10:00:00Z", "records": [ ... ] }
 /// ```
-pub(crate) fn document(records: Vec<Json>) -> Json {
+/// Builds the standard document envelope around `records`.
+pub fn document(records: Vec<Json>) -> Json {
     let now: UnixSeconds = crate::time::now_unix();
     let mut map = Json::object();
     map.insert("format".into(), Json::Number(FORMAT_VERSION as f64));
@@ -225,7 +226,7 @@ pub(crate) fn document(records: Vec<Json>) -> Json {
 
 /// Extracts the record array from a document, rejecting unknown schema
 /// versions instead of guessing.
-pub(crate) fn records(doc: &Json) -> Result<Vec<Json>> {
+pub fn records(doc: &Json) -> Result<Vec<Json>> {
     let format = doc
         .get("format")
         .and_then(Json::as_u64)

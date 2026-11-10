@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/zwrs-core",
     "crates/zwrs-protocol",
+    "crates/zwrs-engine",
 ]
 
 [workspace.package]

@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use crate::{read_varint, varint_bytes, write_varint, ProtocolError};
+use crate::{read_varint, write_varint, ProtocolError};
 
 /// Hard ceiling on an uncompressed frame.
 ///
@@ -276,62 +276,61 @@ impl PacketWriter {
     /// Writer pre-filled with a packet id.
     #[must_use]
     pub fn with_id(id: i32) -> Self {
-        let mut w = Self::new();
-        w.varint(id);
-        w
+        Self::new().varint(id)
     }
 
     /// Appends a VarInt.
-    pub fn varint(&mut self, value: i32) -> &mut Self {
+    pub fn varint(mut self, value: i32) -> Self {
         write_varint(&mut self.buf, value);
         self
     }
 
     /// Appends a raw byte.
-    pub fn u8(&mut self, value: u8) -> &mut Self {
+    pub fn u8(mut self, value: u8) -> Self {
         self.buf.push(value);
         self
     }
 
     /// Appends a big-endian `u16`.
-    pub fn u16(&mut self, value: u16) -> &mut Self {
+    pub fn u16(mut self, value: u16) -> Self {
         self.buf.extend_from_slice(&value.to_be_bytes());
         self
     }
 
     /// Appends a big-endian `i32`.
-    pub fn i32(&mut self, value: i32) -> &mut Self {
+    pub fn i32(mut self, value: i32) -> Self {
         self.buf.extend_from_slice(&value.to_be_bytes());
         self
     }
 
     /// Appends a big-endian `i64`.
-    pub fn i64(&mut self, value: i64) -> &mut Self {
+    pub fn i64(mut self, value: i64) -> Self {
         self.buf.extend_from_slice(&value.to_be_bytes());
         self
     }
 
     /// Appends a boolean byte.
-    pub fn bool(&mut self, value: bool) -> &mut Self {
+    pub fn bool(mut self, value: bool) -> Self {
         self.buf.push(u8::from(value));
         self
     }
 
     /// Appends a length-prefixed UTF-8 string.
-    pub fn string(&mut self, value: &str) -> &mut Self {
-        self.varint(i32::try_from(value.len()).unwrap_or(i32::MAX));
+    pub fn string(mut self, value: &str) -> Self {
+        let len = i32::try_from(value.len()).unwrap_or(i32::MAX);
+        write_varint(&mut self.buf, len);
         self.buf.extend_from_slice(value.as_bytes());
         self
     }
 
     /// Appends a UUID field.
-    pub fn uuid(&mut self, bytes: &[u8; 16]) -> &mut Self {
+    pub fn uuid(mut self, bytes: &[u8; 16]) -> Self {
         self.buf.extend_from_slice(bytes);
         self
     }
 
     /// Appends raw bytes.
-    pub fn bytes(&mut self, bytes: &[u8]) -> &mut Self {
+    pub fn bytes(mut self, bytes: &[u8]) -> Self {
         self.buf.extend_from_slice(bytes);
         self
     }
@@ -367,13 +366,7 @@ impl PacketWriter {
     }
 }
 
-/// Encodes a `String` field for tests and hand-built packets.
-#[must_use]
-pub fn prefixed_string(value: &str) -> Vec<u8> {
-    let mut out = varint_bytes(i32::try_from(value.len()).unwrap_or(i32::MAX));
-    out.extend_from_slice(value.as_bytes());
-    out
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -417,16 +410,16 @@ mod tests {
 
     #[test]
     fn field_roundtrip() {
-        let mut w = PacketWriter::with_id(0x02);
-        w.varint(-7)
+        let payload = PacketWriter::with_id(0x02)
+            .varint(-7)
             .u8(255)
             .u16(65535)
             .i32(-2_000_000)
             .i64(i64::MIN)
             .bool(true)
             .uuid(&[0xAB; 16])
-            .string("héllo ✓");
-        let payload = w.into_payload();
+            .string("héllo ✓")
+            .into_payload();
         let mut r = PacketReader::new(&payload);
         assert_eq!(r.varint().unwrap(), 0x02);
         assert_eq!(r.varint().unwrap(), -7);
@@ -442,9 +435,7 @@ mod tests {
 
     #[test]
     fn string_bounds_are_enforced() {
-        let mut w = PacketWriter::new();
-        w.string(&"x".repeat(100));
-        let payload = w.into_payload();
+        let payload = PacketWriter::new().string(&"x".repeat(100)).into_payload();
         let mut r = PacketReader::new(&payload);
         assert!(matches!(
             r.string(10),
@@ -462,9 +453,7 @@ mod tests {
 
     #[test]
     fn invalid_utf8_rejected() {
-        let mut w = PacketWriter::new();
-        w.varint(2).bytes(&[0xFF, 0xFE]);
-        let payload = w.into_payload();
+        let payload = PacketWriter::new().varint(2).bytes(&[0xFF, 0xFE]).into_payload();
         assert_eq!(
             PacketReader::new(&payload).string(8),
             Err(ProtocolError::InvalidUtf8)
@@ -473,9 +462,10 @@ mod tests {
 
     #[test]
     fn floats_roundtrip() {
-        let mut w = PacketWriter::new();
-        w.bytes(&1.5f64.to_be_bytes()).bytes(&(-0.25f32).to_be_bytes());
-        let payload = w.into_payload();
+        let payload = PacketWriter::new()
+            .bytes(&1.5f64.to_be_bytes())
+            .bytes(&(-0.25f32).to_be_bytes())
+            .into_payload();
         let mut r = PacketReader::new(&payload);
         assert!((r.f64().unwrap() - 1.5).abs() < f64::EPSILON);
         assert!((r.f32().unwrap() + 0.25).abs() < f32::EPSILON);
