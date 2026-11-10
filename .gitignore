@@ -24,3 +24,8 @@
 .vscode/
 *.iml
 .DS_Store
+
+# Release archives are built by scripts/bundle.sh / CI and attached to GitHub
+# releases; they are never committed. A locally verified copy may exist in
+# releases/ for convenience.
+/releases/
