@@ -141,7 +141,18 @@ pub fn execute(state: &Arc<SharedState>, line: &str) -> CommandOutcome {
             keep_running: false,
             recognised: true,
         },
-        other => CommandOutcome::unknown(other),
+        other => {
+            // Nothing built in matches: give the embedder (the Java plugin
+            // host) a chance to run a plugin command before reporting an error.
+            let args: Vec<String> = argument
+                .split_whitespace()
+                .map(ToString::to_string)
+                .collect();
+            if let Some(lines) = crate::server::dispatch_host_command(state, other, &args) {
+                return CommandOutcome::ok(lines);
+            }
+            CommandOutcome::unknown(other)
+        }
     }
 }
 

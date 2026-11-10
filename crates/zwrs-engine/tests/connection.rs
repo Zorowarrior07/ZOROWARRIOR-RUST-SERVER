@@ -159,6 +159,19 @@ fn status_ping(harness: &Harness, protocol: i32) -> (Json, i64) {
     (doc, token)
 }
 
+fn read_disconnect_text(stream: &mut TcpStream) -> String {
+    let packet = read_packet(stream);
+    let mut r = PacketReader::new(&packet);
+    assert_eq!(r.varint().unwrap(), 0x00, "expected a disconnect packet");
+    let text = r.string(32_767).unwrap();
+    Json::parse(&text)
+        .expect("disconnect reason must be JSON")
+        .get("text")
+        .and_then(Json::as_str)
+        .expect("disconnect text")
+        .to_string()
+}
+
 fn login_disconnect(harness: &Harness, protocol: i32, username: &str) -> String {
     let mut stream = harness.connect();
     handshake(&mut stream, protocol, 2);
@@ -532,4 +545,155 @@ fn zero_length_and_oversized_frames_are_dropped() {
     }
     let (doc, _) = status_ping(&harness, 763);
     assert!(doc.get("version").is_some());
+}
+
+// ---------------------------------------------------------------------------
+// Host hooks (the seam the Java plugin host plugs into)
+// ---------------------------------------------------------------------------
+
+/// Records what the engine reports, so the test can assert on real events
+/// instead of on log output.
+#[derive(Default)]
+struct RecordingListener {
+    joins: std::sync::Mutex<Vec<zwrs_engine::PlayerEvent>>,
+    quits: std::sync::Mutex<Vec<zwrs_engine::PlayerEvent>>,
+    commands: std::sync::Mutex<Vec<(String, Vec<String>)>>,
+}
+
+impl zwrs_engine::HostListener for RecordingListener {
+    fn player_join(&self, event: &zwrs_engine::PlayerEvent) {
+        self.joins.lock().unwrap().push(event.clone());
+    }
+
+    fn player_quit(&self, event: &zwrs_engine::PlayerEvent) {
+        self.quits.lock().unwrap().push(event.clone());
+    }
+
+    fn command(&self, command: &str, args: &[String]) -> zwrs_engine::CommandReply {
+        self.commands
+            .lock()
+            .unwrap()
+            .push((command.to_string(), args.to_vec()));
+        if command == "hello" {
+            zwrs_engine::CommandReply::Handled(vec![format!("hello {}", args.join(" "))])
+        } else {
+            zwrs_engine::CommandReply::Unknown
+        }
+    }
+}
+
+#[test]
+fn host_listener_receives_real_join_and_quit_events() {
+    let harness = Harness::new("hooks", |_| {});
+    let listener = Arc::new(RecordingListener::default());
+    zwrs_engine::server::set_listener(&harness.state, Some(listener.clone()));
+
+    let mut stream = harness.connect();
+    handshake(&mut stream, 772, 2);
+    stream
+        .write_all(&PacketWriter::with_id(0x00).string("HookProbe").into_frame())
+        .unwrap();
+    let text = read_disconnect_text(&mut stream);
+    assert!(text.contains("identity was accepted"), "got: {text}");
+
+    let joins = listener.joins.lock().unwrap().clone();
+    assert_eq!(joins.len(), 1, "exactly one join event");
+    let join = &joins[0];
+    assert_eq!(join.username, "HookProbe");
+    assert_eq!(join.protocol, 772);
+    assert_eq!(
+        join.uuid,
+        zwrs_core::offline_uuid("HookProbe").to_string(),
+        "the event carries the same identity that was persisted"
+    );
+    assert!(join.timestamp.ends_with('Z'), "ISO-8601 UTC timestamp");
+    assert_eq!(join.session_seconds, 0, "a join has no duration");
+    assert!(join.online_count >= 1);
+
+    // The profile must already be on disk when the hook fires: the plugin sees
+    // durable state, never a promise.
+    let record = harness.record_for(&join.uuid).expect("profile persisted");
+    assert_eq!(
+        record.get("online").and_then(Json::as_bool),
+        Some(true),
+        "profile is online at event time"
+    );
+
+    drop(stream);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while listener.quits.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let quits = listener.quits.lock().unwrap().clone();
+    assert_eq!(quits.len(), 1, "exactly one quit event");
+    assert_eq!(quits[0].uuid, join.uuid);
+    assert!(quits[0].timestamp.ends_with('Z'));
+
+    let record = harness.record_for(&join.uuid).expect("profile persisted");
+    assert_eq!(
+        record.get("online").and_then(Json::as_bool),
+        Some(false),
+        "the profile is already closed when the quit hook fires"
+    );
+}
+
+#[test]
+fn host_listener_handles_plugin_commands_and_unknown_ones() {
+    let harness = Harness::new("hooks-commands", |_| {});
+    let listener = Arc::new(RecordingListener::default());
+    zwrs_engine::server::set_listener(&harness.state, Some(listener.clone()));
+
+    let outcome = zwrs_engine::admin::execute(&harness.state, "/hello one two");
+    assert!(outcome.recognised, "the host claimed the command");
+    assert_eq!(outcome.lines, vec!["hello one two".to_string()]);
+    assert_eq!(
+        listener.commands.lock().unwrap().clone(),
+        vec![("hello".to_string(), vec!["one".to_string(), "two".to_string()])]
+    );
+
+    // Built-in commands must never be shadowed by a plugin.
+    let status = zwrs_engine::admin::execute(&harness.state, "/status");
+    assert!(status.recognised);
+    assert_eq!(
+        listener.commands.lock().unwrap().len(),
+        1,
+        "built-ins are not delegated"
+    );
+
+    let unknown = zwrs_engine::admin::execute(&harness.state, "/definitely-not-a-command");
+    assert!(!unknown.recognised, "still reported as unknown");
+    assert!(unknown.lines[0].contains("Unknown command"));
+}
+
+#[test]
+fn a_panicking_host_listener_cannot_take_the_engine_down() {
+    struct Panicking;
+    impl zwrs_engine::HostListener for Panicking {
+        fn player_join(&self, _event: &zwrs_engine::PlayerEvent) {
+            panic!("plugin bug");
+        }
+        fn player_quit(&self, _event: &zwrs_engine::PlayerEvent) {
+            panic!("plugin bug");
+        }
+        fn command(&self, _command: &str, _args: &[String]) -> zwrs_engine::CommandReply {
+            panic!("plugin bug");
+        }
+    }
+
+    let harness = Harness::new("hooks-panic", |_| {});
+    zwrs_engine::server::set_listener(&harness.state, Some(Arc::new(Panicking)));
+
+    let text = login_disconnect(&harness, 772, "PanicProbe");
+    assert!(
+        text.contains("identity was accepted"),
+        "the login still succeeds: {text}"
+    );
+
+    // The engine is still serving after the panic.
+    let (doc, _) = status_ping(&harness, 772);
+    assert!(doc.get("players").is_some());
+
+    // And a panicking command handler degrades to "unknown command".
+    let outcome = zwrs_engine::admin::execute(&harness.state, "/boom");
+    assert!(!outcome.recognised);
 }

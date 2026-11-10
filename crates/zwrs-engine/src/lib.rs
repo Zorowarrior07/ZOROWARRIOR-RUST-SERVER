@@ -33,11 +33,13 @@
 
 pub mod admin;
 pub mod auth;
+pub mod events;
 pub mod packet;
 pub mod plugins;
 pub mod server;
 pub mod status;
 
+pub use events::{CommandReply, HostListener, PlayerEvent};
 pub use server::{prepare, shutdown_all, start, ServerHandle, SharedState};
 
 /// Engine version (kept in step with the workspace version).

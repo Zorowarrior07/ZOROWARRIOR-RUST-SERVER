@@ -80,7 +80,9 @@ impl Metrics {
 }
 
 /// State shared by the accept loop, connections and the admin console.
-#[derive(Debug)]
+///
+/// Not `Debug`: the host listener is a trait object, and printing it would say
+/// nothing useful. Use `/status` for a readable snapshot.
 pub struct SharedState {
     /// Effective configuration.
     pub config: Config,
@@ -100,6 +102,33 @@ pub struct SharedState {
     pub started_wall: Timestamp,
     /// Actual bound address once listening.
     pub bound_address: Mutex<Option<SocketAddr>>,
+    /// Optional embedder (the Java plugin host). `None` in the standalone
+    /// binary and in tests, in which case every hook is a no-op.
+    pub listener: Mutex<Option<Arc<dyn crate::events::HostListener>>>,
+}
+
+impl std::fmt::Debug for SharedState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let listener = match self.listener.try_lock() {
+            Ok(slot) => {
+                if slot.is_some() {
+                    "installed"
+                } else {
+                    "none"
+                }
+            }
+            Err(_) => "busy",
+        };
+        f.debug_struct("SharedState")
+            .field("config", &self.config)
+            .field("players", &"<repository>")
+            .field("sessions", &"<registry>")
+            .field("metrics", &self.metrics)
+            .field("host_listener", &listener)
+            .field("shutting_down", &self.shutting_down)
+            .field("bound_address", &self.bound_address.try_lock().ok())
+            .finish()
+    }
 }
 
 impl SharedState {
@@ -262,6 +291,7 @@ pub fn prepare(config: Config) -> zwrs_core::Result<Arc<SharedState>> {
         started_at: Instant::now(),
         started_wall: now,
         bound_address: Mutex::new(None),
+        listener: Mutex::new(None),
     }))
 }
 
@@ -661,6 +691,20 @@ fn serve_login(
                 identity.uuid()
             );
             persist_sessions(state);
+            // Only now, with the profile and session on disk, does the embedder
+            // hear about the join.
+            let event = crate::events::PlayerEvent {
+                uuid: identity.uuid().to_string(),
+                username: identity.username().to_string(),
+                protocol,
+                address: peer.to_string(),
+                timestamp: now.to_string(),
+                online_count: state.online_count(),
+                session_seconds: 0,
+            };
+            deliver(state, "player_join", move |listener| {
+                listener.player_join(&event);
+            });
         }
         Err(e) => {
             Metrics::inc(&state.metrics.logins_refused);
@@ -728,7 +772,84 @@ fn serve_login(
         Metrics::inc(&state.metrics.sessions_ended);
         log_trace!("zwrs::session", "session closed ({duration}s)");
     }
+    let event = crate::events::PlayerEvent {
+        uuid: identity.uuid().to_string(),
+        username: identity.username().to_string(),
+        protocol,
+        address: peer.to_string(),
+        timestamp: ended_at.to_string(),
+        online_count: state.online_count(),
+        session_seconds: duration.map_or(0, |(_, seconds)| seconds),
+    };
+    deliver(state, "player_quit", move |listener| {
+        listener.player_quit(&event);
+    });
     Ok(())
+}
+
+/// Installs (or clears) the embedder that receives player events and unknown
+/// console commands. Replacing a listener is allowed; `None` reverts to no-ops.
+pub fn set_listener(state: &SharedState, listener: Option<Arc<dyn crate::events::HostListener>>) {
+    let mut slot = match state.listener.lock() {
+        Ok(slot) => slot,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *slot = listener;
+}
+
+/// The installed listener, if any. The guard is dropped before the caller runs
+/// plugin code so a slow plugin cannot block listener replacement.
+fn listener_of(state: &SharedState) -> Option<Arc<dyn crate::events::HostListener>> {
+    match state.listener.lock() {
+        Ok(slot) => slot.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    }
+}
+
+/// Delivers an event, containing panics so a broken embedder cannot take the
+/// engine down. Called with no engine lock held.
+fn deliver<F>(state: &SharedState, what: &str, body: F)
+where
+    F: FnOnce(&dyn crate::events::HostListener) + std::panic::UnwindSafe,
+{
+    let Some(listener) = listener_of(state) else {
+        return;
+    };
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(listener.as_ref()))).is_err()
+    {
+        log_error!(
+            "zwrs::hooks",
+            "the host listener panicked while handling {what}; the engine keeps running"
+        );
+    }
+}
+
+/// Sends a console command to the embedder.
+///
+/// Returns the host's reply so `/help` can list plugin commands and so an
+/// unknown command still produces the engine's own error message.
+#[must_use]
+pub fn dispatch_host_command(
+    state: &SharedState,
+    command: &str,
+    args: &[String],
+) -> Option<Vec<String>> {
+    let listener = listener_of(state)?;
+    let command = command.to_string();
+    let args = args.to_vec();
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        listener.command(&command, &args)
+    })) {
+        Ok(crate::events::CommandReply::Handled(lines)) => Some(lines),
+        Ok(crate::events::CommandReply::Unknown) => None,
+        Err(_) => {
+            log_error!(
+                "zwrs::hooks",
+                "the host listener panicked while handling /{command}; the command was ignored"
+            );
+            None
+        }
+    }
 }
 
 /// Writes the session registry to disk so history survives a crash.
