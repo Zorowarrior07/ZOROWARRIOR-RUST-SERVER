@@ -1,0 +1,19 @@
+# Rust build output
+/target/
+**/*.rs.bk
+
+# Java build output
+/build/
+/java/build/
+/java/out/
+*.class
+
+# Runtime data written by the server
+/data/
+/logs/
+/config/
+/plugins/
+/native/
+
+# Local toolchains / scratch
+/.toolchain/

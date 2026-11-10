@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zwrs-core",
+    "crates/zwrs-protocol",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Zorowarrior07/ZOROWARRIOR-RUST-SERVER"
+authors = ["ZOROWARRIOR contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+todo = "warn"
+unwrap_used = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+# `unwind` (the default) is required: the JNI layer catches panics and converts
+# them into JVM exceptions instead of aborting the whole game server.
+strip = "symbols"

@@ -1,0 +1,17 @@
+[package]
+name = "zwrs-core"
+description = "ZWRS core primitives: identity, persistence, configuration, logging."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Intentionally empty: ZWRS core must build with no third-party crates so that
+# the engine can be compiled in restricted environments (Termux, CI sandboxes,
+# air-gapped builds) and so the dependency/licence surface stays auditable.
+
+[lints]
+workspace = true

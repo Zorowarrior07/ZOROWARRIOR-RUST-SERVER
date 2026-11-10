@@ -1,0 +1,16 @@
+[package]
+name = "zwrs-protocol"
+description = "Minecraft Java Edition wire primitives (VarInt, framing, handshake, status, login)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# No third-party crates: the wire format is simple enough to implement and
+# audit directly, and this keeps phone/CI builds fast.
+
+[lints]
+workspace = true
