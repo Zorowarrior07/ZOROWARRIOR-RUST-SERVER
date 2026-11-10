@@ -55,7 +55,10 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
+          # The JAR is published both on its own (so `java -jar` works from a
+          # single download) and inside the tarball with the native engine.
           files: |
+            dist/*/ZOROWARRIOR-Rust-Server.jar
             dist/*.tar.gz
             dist/release-SHA256SUMS
           body: |
